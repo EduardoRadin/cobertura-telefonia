@@ -67,7 +67,7 @@ php artisan route:clear\n\
 php artisan view:clear\n\
 \n\
 echo "A executar as migrações da base de dados..."\n\
-php artisan migrate --force\n\
+# php artisan migrate --force\n\
 \n\
 echo "A iniciar o servidor Apache..."\n\
 apache2-foreground' > /usr/local/bin/start.sh
