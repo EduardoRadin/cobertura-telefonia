@@ -38,8 +38,15 @@ RUN npm run build
 # Criar o ficheiro .env a partir do exemplo
 RUN cp .env.example .env
 
-# **[A CORREÇÃO]** Alterar a ligação da base de dados no .env para pgsql
+# **[A CORREÇÃO]** - Configurar o .env para usar a base de dados da Render
+# 1. Mudar a ligação para pgsql
 RUN sed -i 's/DB_CONNECTION=sqlite/DB_CONNECTION=pgsql/g' .env
+# 2. Apagar as variáveis de base de dados locais para forçar o uso da DATABASE_URL
+RUN sed -i '/^DB_HOST=/d' .env
+RUN sed -i '/^DB_PORT=/d' .env
+RUN sed -i '/^DB_DATABASE=/d' .env
+RUN sed -i '/^DB_USERNAME=/d' .env
+RUN sed -i '/^DB_PASSWORD=/d' .env
 
 # Gerar a chave da aplicação Laravel
 RUN php artisan key:generate
@@ -59,7 +66,7 @@ RUN sed -i 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available
 EXPOSE 80
 
 # --- 4. SCRIPT DE INICIALIZAÇÃO ---
-# Script de inicialização simplificado e robusto
+# Script de inicialização para limpar caches e executar migrações
 RUN echo '#!/bin/bash\n\
 # Assegurar que as permissões estão corretas no arranque\n\
 chown -R www-data:www-data /var/www/html/storage\n\
