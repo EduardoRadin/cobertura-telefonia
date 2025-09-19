@@ -1,9 +1,7 @@
 # Use a imagem base oficial do PHP 8.2 com Apache
 FROM php:8.2-apache
 
-# Instalar dependências do sistema
-# - libpq-dev: para a extensão PostgreSQL
-# - nodejs & npm: para o build do frontend
+# --- 1. INSTALAÇÃO DE DEPENDÊNCIAS ---
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -26,41 +24,48 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Definir o diretório de trabalho
 WORKDIR /var/www/html
 
+
+# --- 2. BUILD DO PROJETO ---
 # Copiar os arquivos de dependência primeiro para otimizar o cache do Docker
 COPY composer.json composer.lock ./
-# Instalar dependências do PHP sem pacotes de desenvolvimento
-RUN composer install --optimize-autoloader --no-interaction --no-plugins --no-scripts --no-dev
+RUN composer install --optimize-autoloader --no-dev
 
 COPY package.json package-lock.json ./
-# Instalar dependências do Node.js
 RUN npm install
 
 # Copiar o restante dos arquivos do projeto
 COPY . .
 
-# Executar o restante dos scripts do composer e o build do frontend
-RUN composer install --optimize-autoloader --no-dev
+# Gerar a chave da aplicação Laravel
+RUN php artisan key:generate
+
+# Construir os assets de frontend
 RUN npm run build
 
-# Criar o arquivo .env a partir do exemplo (as variáveis da Render irão sobrescrevê-lo)
-RUN cp .env.example .env
 
+# --- 3. CONFIGURAÇÃO DO SERVIDOR ---
 # Ajustar permissões para o Laravel
 RUN chown -R www-data:www-data /var/www/html
 RUN chmod -R 755 /var/www/html/storage
 RUN chmod -R 755 /var/www/html/bootstrap/cache
 
-# Habilitar mod_rewrite do Apache para URLs amigáveis
+# Habilitar mod_rewrite do Apache
 RUN a2enmod rewrite
+
+# **[CORREÇÃO DO PROBLEMA #2]** - Apontar o Apache para a pasta /public
+RUN sed -i 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/000-default.conf
 
 # Expor a porta 80
 EXPOSE 80
 
-# Script de inicialização corrigido
-# Adicionado "php artisan config:cache" para carregar as variáveis de ambiente corretamente
+
+# --- 4. SCRIPT DE INICIALIZAÇÃO ---
+# **[CORREÇÃO DO PROBLEMA #1]** - Script de inicialização corrigido
 RUN echo '#!/bin/bash\n\
 echo "Limpando cache de configuração..."\n\
 php artisan config:cache\n\
+php artisan route:cache\n\
+php artisan view:cache\n\
 echo "Executando migrações do banco de dados..."\n\
 php artisan migrate --force\n\
 echo "Iniciando servidor Apache..."\n\
