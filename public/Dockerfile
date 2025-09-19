@@ -37,11 +37,15 @@ RUN npm run build
 
 # Criar o ficheiro .env a partir do exemplo
 RUN cp .env.example .env
+
+# **[A CORREÇÃO]** Alterar a ligação da base de dados no .env para pgsql
+RUN sed -i 's/DB_CONNECTION=sqlite/DB_CONNECTION=pgsql/g' .env
+
 # Gerar a chave da aplicação Laravel
 RUN php artisan key:generate
 
 # --- 3. CONFIGURAÇÃO DO SERVIDOR ---
-# **[CORREÇÃO]** Assegurar que as permissões estão corretas durante o build
+# Assegurar que as permissões e pastas existem durante o build
 RUN mkdir -p storage/framework/{sessions,views,cache} storage/logs
 RUN touch storage/logs/laravel.log
 RUN chown -R www-data:www-data /var/www/html
@@ -55,19 +59,19 @@ RUN sed -i 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available
 EXPOSE 80
 
 # --- 4. SCRIPT DE INICIALIZAÇÃO ---
-# **[CORREÇÃO]** Script de inicialização simplificado
+# Script de inicialização simplificado e robusto
 RUN echo '#!/bin/bash\n\
 # Assegurar que as permissões estão corretas no arranque\n\
 chown -R www-data:www-data /var/www/html/storage\n\
 chmod -R 775 /var/www/html/storage\n\
 \n\
-echo "A limpar caches..."\n\
+echo "A limpar caches para ler as variáveis de ambiente..."\n\
 php artisan config:clear\n\
 php artisan route:clear\n\
 php artisan view:clear\n\
 \n\
 echo "A executar as migrações da base de dados..."\n\
-# php artisan migrate --force\n\
+php artisan migrate --force\n\
 \n\
 echo "A iniciar o servidor Apache..."\n\
 apache2-foreground' > /usr/local/bin/start.sh
