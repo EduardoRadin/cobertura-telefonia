@@ -15,54 +15,53 @@ RUN apt-get update && apt-get install -y \
     npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar extensões PHP necessárias para o Laravel
+# Instalar extensões PHP
 RUN docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd
 
-# Instalar Composer globalmente
+# Instalar Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Definir o diretório de trabalho
 WORKDIR /var/www/html
 
-
 # --- 2. BUILD DO PROJETO ---
-# Copiar os arquivos de dependência primeiro para otimizar o cache do Docker
+
+# Copiar os ficheiros de dependência
 COPY composer.json composer.lock ./
+
+# **[CORREÇÃO]** Instalar dependências SEM executar scripts (porque os ficheiros da app ainda não existem)
+RUN composer install --optimize-autoloader --no-dev --no-scripts --no-autoloader
+
+# Copiar o resto dos ficheiros da aplicação
+COPY . .
+
+# **[CORREÇÃO]** Agora que todos os ficheiros existem, finalize a instalação do Composer
+# Isto irá gerar o autoloader e executar os scripts como o 'package:discover'
 RUN composer install --optimize-autoloader --no-dev
 
-COPY package.json package-lock.json ./
+# Instalar dependências de frontend e construir os assets
 RUN npm install
-
-# Copiar o restante dos arquivos do projeto
-COPY . .
+RUN npm run build
 
 # Gerar a chave da aplicação Laravel
 RUN php artisan key:generate
 
-# Construir os assets de frontend
-RUN npm run build
-
-
 # --- 3. CONFIGURAÇÃO DO SERVIDOR ---
-# Ajustar permissões para o Laravel
+# Ajustar permissões
 RUN chown -R www-data:www-data /var/www/html
 RUN chmod -R 755 /var/www/html/storage
 RUN chmod -R 755 /var/www/html/bootstrap/cache
 
-# Habilitar mod_rewrite do Apache
+# Apontar o Apache para a pasta /public
 RUN a2enmod rewrite
-
-# **[CORREÇÃO DO PROBLEMA #2]** - Apontar o Apache para a pasta /public
 RUN sed -i 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/000-default.conf
 
 # Expor a porta 80
 EXPOSE 80
 
-
 # --- 4. SCRIPT DE INICIALIZAÇÃO ---
-# **[CORREÇÃO DO PROBLEMA #1]** - Script de inicialização corrigido
 RUN echo '#!/bin/bash\n\
-echo "Limpando cache de configuração..."\n\
+echo "Limpando e cacheando configurações..."\n\
 php artisan config:cache\n\
 php artisan route:cache\n\
 php artisan view:cache\n\
@@ -71,8 +70,8 @@ php artisan migrate --force\n\
 echo "Iniciando servidor Apache..."\n\
 apache2-foreground' > /usr/local/bin/start.sh
 
-# Tornar o script de inicialização executável
+# Tornar o script executável
 RUN chmod +x /usr/local/bin/start.sh
 
-# Definir o comando de inicialização do container
+# Comando de inicialização
 CMD ["/usr/local/bin/start.sh"]
