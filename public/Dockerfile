@@ -25,35 +25,23 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 
 # --- 2. BUILD DO PROJETO ---
-# Copiar os ficheiros de dependência
 COPY composer.json composer.lock ./
-
-# Instalar dependências SEM executar scripts
 RUN composer install --optimize-autoloader --no-dev --no-scripts --no-autoloader
 
-# Copiar o resto dos ficheiros da aplicação
 COPY . .
 
-# Finalizar a instalação do Composer, agora com os ficheiros da app presentes
 RUN composer install --optimize-autoloader --no-dev
 
-# Instalar dependências de frontend e construir os assets
 RUN npm install
 RUN npm run build
 
-# **[CORREÇÃO]** Criar o ficheiro .env a partir do exemplo antes de gerar a chave
+# Criar o ficheiro .env a partir do exemplo
 RUN cp .env.example .env
-
 # Gerar a chave da aplicação Laravel
 RUN php artisan key:generate
 
 # --- 3. CONFIGURAÇÃO DO SERVIDOR ---
-# Ajustar permissões
-RUN chown -R www-data:www-data /var/www/html
-RUN chmod -R 755 /var/www/html/storage
-RUN chmod -R 755 /var/www/html/bootstrap/cache
-
-# Apontar o Apache para a pasta /public
+# **[CORREÇÃO #2]** - Apontar o Apache para a pasta /public
 RUN a2enmod rewrite
 RUN sed -i 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/000-default.conf
 
@@ -61,13 +49,20 @@ RUN sed -i 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available
 EXPOSE 80
 
 # --- 4. SCRIPT DE INICIALIZAÇÃO ---
+# **[CORREÇÃO #1]** - Script de inicialização final para corrigir permissões e cache
 RUN echo '#!/bin/bash\n\
+# Assegurar que as permissões estão sempre corretas na inicialização\n\
+chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache\n\
+chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache\n\
+\n\
 echo "Limpando e cacheando configurações..."\n\
 php artisan config:cache\n\
 php artisan route:cache\n\
 php artisan view:cache\n\
+\n\
 echo "Executando migrações do banco de dados..."\n\
 php artisan migrate --force\n\
+\n\
 echo "Iniciando servidor Apache..."\n\
 apache2-foreground' > /usr/local/bin/start.sh
 
