@@ -40,15 +40,12 @@ RUN cp .env.example .env
 # Gerar a chave da aplicação Laravel
 RUN php artisan key:generate
 
-# **[CORREÇÃO #1]** Criar explicitamente as pastas e o ficheiro de log durante o build
-RUN mkdir -p storage/framework/{sessions,views,cache}
-RUN mkdir -p storage/logs
-RUN touch storage/logs/laravel.log
-
 # --- 3. CONFIGURAÇÃO DO SERVIDOR ---
-# Ajustar permissões durante o build
+# **[CORREÇÃO]** Assegurar que as permissões estão corretas durante o build
+RUN mkdir -p storage/framework/{sessions,views,cache} storage/logs
+RUN touch storage/logs/laravel.log
 RUN chown -R www-data:www-data /var/www/html
-RUN chmod -R 775 /var/www/html/storage
+RUN chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 # Apontar o Apache para a pasta /public
 RUN a2enmod rewrite
@@ -58,25 +55,16 @@ RUN sed -i 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available
 EXPOSE 80
 
 # --- 4. SCRIPT DE INICIALIZAÇÃO ---
-# **[CORREÇÃO #2]** Script de inicialização final e à prova de falhas
+# **[CORREÇÃO]** Script de inicialização simplificado
 RUN echo '#!/bin/bash\n\
-# Garantir que o ficheiro de log existe e tem as permissões corretas\n\
-touch /var/www/html/storage/logs/laravel.log\n\
-\n\
-# Forçar as permissões corretas em toda a pasta storage no arranque\n\
+# Assegurar que as permissões estão corretas no arranque\n\
 chown -R www-data:www-data /var/www/html/storage\n\
 chmod -R 775 /var/www/html/storage\n\
 \n\
-# Limpar todos os caches para forçar a releitura das variáveis de ambiente\n\
-php artisan cache:clear\n\
+echo "A limpar caches..."\n\
 php artisan config:clear\n\
 php artisan route:clear\n\
 php artisan view:clear\n\
-\n\
-# Criar os ficheiros de cache com as configurações corretas\n\
-php artisan config:cache\n\
-php artisan route:cache\n\
-php artisan view:cache\n\
 \n\
 echo "A executar as migrações da base de dados..."\n\
 php artisan migrate --force\n\
