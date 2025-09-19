@@ -25,23 +25,24 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 
 # --- 2. BUILD DO PROJETO ---
-
 # Copiar os ficheiros de dependência
 COPY composer.json composer.lock ./
 
-# **[CORREÇÃO]** Instalar dependências SEM executar scripts (porque os ficheiros da app ainda não existem)
+# Instalar dependências SEM executar scripts
 RUN composer install --optimize-autoloader --no-dev --no-scripts --no-autoloader
 
 # Copiar o resto dos ficheiros da aplicação
 COPY . .
 
-# **[CORREÇÃO]** Agora que todos os ficheiros existem, finalize a instalação do Composer
-# Isto irá gerar o autoloader e executar os scripts como o 'package:discover'
+# Finalizar a instalação do Composer, agora com os ficheiros da app presentes
 RUN composer install --optimize-autoloader --no-dev
 
 # Instalar dependências de frontend e construir os assets
 RUN npm install
 RUN npm run build
+
+# **[CORREÇÃO]** Criar o ficheiro .env a partir do exemplo antes de gerar a chave
+RUN cp .env.example .env
 
 # Gerar a chave da aplicação Laravel
 RUN php artisan key:generate
